@@ -142,11 +142,10 @@
 
 <!-- WORLD CLOCKS -->
 <div class="world-clocks">
-  <div class="wc" id="wc-tlv"><div class="wc-city">🇮🇱 תל אביב</div><div class="wc-time">--:--</div><div class="wc-tz">IST</div><div class="wc-st mkt-closed">--</div></div>
-  <div class="wc" id="wc-lon"><div class="wc-city">🇬🇧 לונדון</div>  <div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
-  <div class="wc" id="wc-fra"><div class="wc-city">🇩🇪 פרנקפורט</div><div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
-  <div class="wc" id="wc-nyc"><div class="wc-city">🇺🇸 ניו יורק</div><div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
-  <div class="wc" id="wc-tok"><div class="wc-city">🇯🇵 טוקיו</div>   <div class="wc-time">--:--</div><div class="wc-tz">JST</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-tok"><div class="wc-city"><img src="https://flagcdn.com/20x15/jp.png" style="height:11px;vertical-align:middle;border-radius:1px;margin-left:4px"> טוקיו</div>   <div class="wc-time">--:--</div><div class="wc-tz">JST</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-fra"><div class="wc-city"><img src="https://flagcdn.com/20x15/de.png" style="height:11px;vertical-align:middle;border-radius:1px;margin-left:4px"> פרנקפורט</div><div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-lon"><div class="wc-city"><img src="https://flagcdn.com/20x15/gb.png" style="height:11px;vertical-align:middle;border-radius:1px;margin-left:4px"> לונדון</div>  <div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-nyc"><div class="wc-city"><img src="https://flagcdn.com/20x15/us.png" style="height:11px;vertical-align:middle;border-radius:1px;margin-left:4px"> ניו יורק</div><div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
 </div>
 
 <div id="closedBanner" class="closed-banner">
@@ -274,11 +273,10 @@ const INDICES = [
 ];
 
 const ZONES = [
-  { id:'wc-tlv', tz:'Asia/Jerusalem',  mktOpen:{s:6.5, e:17.5} },
-  { id:'wc-lon', tz:'Europe/London',   mktOpen:{s:8,   e:16.5} },
-  { id:'wc-fra', tz:'Europe/Berlin',   mktOpen:{s:9,   e:17.5} },
-  { id:'wc-nyc', tz:'America/New_York',mktOpen:{s:9.5, e:16}   },
   { id:'wc-tok', tz:'Asia/Tokyo',      mktOpen:{s:9,   e:15.5} },
+  { id:'wc-fra', tz:'Europe/Berlin',   mktOpen:{s:9,   e:17.5} },
+  { id:'wc-lon', tz:'Europe/London',   mktOpen:{s:8,   e:16.5} },
+  { id:'wc-nyc', tz:'America/New_York',mktOpen:{s:9.5, e:16}   },
 ];
 
 const SESSIONS = [
