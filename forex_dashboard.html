@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>דשבורד שוק הון ומט"ח</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef1f7; color: #1a1a2e; direction: rtl; min-height: 100vh; }
+
+    .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 12px 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .header-title { font-size: 1.2rem; font-weight: 700; }
+    .header-sub { font-size: 0.7rem; opacity: 0.55; margin-top: 2px; }
+    .hright { display: flex; align-items: center; gap: 13px; }
+    .main-clock { font-size: 1.28rem; font-weight: 700; font-variant-numeric: tabular-nums; direction: ltr; }
+    .date-lbl { font-size: 0.67rem; opacity: 0.55; text-align: right; }
+    .refresh-btn { background: rgba(255,255,255,0.13); border: 1px solid rgba(255,255,255,0.28); color: white; padding: 5px 12px; border-radius: 16px; cursor: pointer; font-size: 0.75rem; white-space: nowrap; }
+    .refresh-btn:hover { background: rgba(255,255,255,0.23); }
+    .refresh-btn:disabled { opacity: .42; cursor: not-allowed; }
+
+    /* WORLD CLOCKS */
+    .world-clocks { background: #0f172a; padding: 9px 22px; display: flex; overflow-x: auto; }
+    .wc { flex: 1; min-width: 106px; display: flex; flex-direction: column; align-items: center; padding: 5px 8px; border-left: 1px solid rgba(255,255,255,0.07); }
+    .wc:last-child { border-left: none; }
+    .wc-city { font-size: 0.63rem; color: rgba(255,255,255,0.44); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 2px; white-space: nowrap; }
+    .wc-time { font-size: 1.06rem; font-weight: 700; font-variant-numeric: tabular-nums; color: white; direction: ltr; }
+    .wc-tz { font-size: 0.58rem; color: rgba(255,255,255,0.32); direction: ltr; margin-top: 1px; }
+    .wc-st { display: inline-block; font-size: 0.56rem; padding: 1px 5px; border-radius: 5px; margin-top: 2px; font-weight: 700; }
+    .mkt-open   { background: #064e3b; color: #6ee7b7; }
+    .mkt-closed { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.27); }
+
+    /* SESSIONS BAR */
+    .sessions-bar { background: white; padding: 8px 22px; display: flex; gap: 7px; align-items: center; border-bottom: 1px solid #e0e4ec; flex-wrap: wrap; }
+    .schip { display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 16px; font-size: 0.72rem; font-weight: 600; border: 1.5px solid; white-space: nowrap; transition: all .3s; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .schip.active .dot { background: white; animation: blink 1.5s infinite; }
+    .schip.active { color: white; }
+    .s-asia { border-color:#f59e0b;color:#f59e0b; } .s-asia.active { background:#f59e0b; }
+    .s-europe { border-color:#3b82f6;color:#3b82f6; } .s-europe.active { background:#3b82f6; }
+    .s-us { border-color:#10b981;color:#10b981; } .s-us.active { background:#10b981; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .block-chip { margin-right: auto; font-size: 0.69rem; color: #64748b; background: #f1f5f9; padding: 3px 8px; border-radius: 8px; }
+
+    .closed-banner { background: #fef3c7; border-bottom: 2px solid #f59e0b; padding: 7px 22px; font-size: 0.77rem; color: #78350f; display: none; align-items: center; gap: 8px; }
+
+    .main { padding: 12px 22px; }
+    .sbar { background: white; border-radius: 9px; padding: 7px 12px; margin-bottom: 11px; font-size: 0.73rem; color: #64748b; display: flex; align-items: center; gap: 7px; }
+    .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .sdot.live    { background: #10b981; animation: blink 2s infinite; }
+    .sdot.loading { background: #f59e0b; animation: blink .7s infinite; }
+    .sdot.closed  { background: #94a3b8; }
+    .sdot.error   { background: #ef4444; }
+    .err-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 7px; padding: 9px 13px; color: #dc2626; font-size: 0.74rem; margin-bottom: 11px; }
+
+    /* CARD */
+    .card { background: white; border-radius: 11px; padding: 15px 17px; margin-bottom: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .card-title { font-size: 0.83rem; font-weight: 700; color: #334155; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .badge { font-size: 0.61rem; background: #eff6ff; color: #3b82f6; padding: 2px 7px; border-radius: 8px; font-weight: 600; }
+    .badge-warn { background: #fef9c3; color: #854d0e; }
+    .card-hint { font-size: 0.64rem; color: #94a3b8; margin-right: auto; }
+
+    /* TABLE */
+    .rtbl { width: 100%; border-collapse: collapse; font-size: 0.77rem; }
+    .rtbl th { text-align: right; padding: 5px 8px; font-size: 0.61rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .5px; border-bottom: 2px solid #f1f5f9; white-space: nowrap; }
+    .rtbl td { padding: 7px 8px; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
+    .rtbl tr:last-child td { border-bottom: none; }
+    .rtbl tr.clickable { cursor: pointer; }
+    .rtbl tr.clickable:hover td { background: #f0f7ff; }
+    .rtbl tr.row-sel td { background: #eff6ff !important; }
+    .rtbl tr.row-sel td:first-child { border-right: 3px solid #3b82f6; }
+
+    .pair-cell { direction: ltr; text-align: left; font-weight: 700; font-size: 0.83rem; color: #1e293b; white-space: nowrap; }
+    .ba-cell { direction: ltr; text-align: left; white-space: nowrap; }
+    .ba-lbl { font-size: 0.56rem; color: #cbd5e1; font-weight: 700; }
+    .bid-v { color: #dc2626; font-weight: 700; font-size: 0.79rem; font-variant-numeric: tabular-nums; }
+    .ask-v { color: #16a34a; font-weight: 700; font-size: 0.79rem; font-variant-numeric: tabular-nums; }
+    .spd-v { color: #94a3b8; font-size: 0.62rem; }
+    .price-cell { direction: ltr; text-align: left; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.83rem; }
+
+    .ret-cell { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.73rem; white-space: nowrap; padding: 7px 4px; text-align: center; }
+    .rpill { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; }
+    .rpos  { background: #dcfce7; color: #16a34a; }
+    .rneg  { background: #fee2e2; color: #dc2626; }
+    .rzero { background: #f1f5f9; color: #94a3b8; }
+    .rna   { color: #d1d5db; font-size: 0.65rem; font-weight: 400; }
+
+    .ch { padding: 2px 6px; border-radius: 5px; color: white; font-size: 0.6rem; font-weight: 700; }
+    .ch-a{background:#f59e0b}.ch-e{background:#3b82f6}.ch-u{background:#10b981}.ch-3{background:#8b5cf6}.ch-24{background:#64748b}
+
+    /* CHARTS SECTION */
+    .charts-row { display: grid; gap: 10px; margin-top: 12px; }
+    .charts-fx-row   { grid-template-columns: repeat(5,1fr); }
+    .charts-idx-row  { grid-template-columns: repeat(5,1fr); }
+
+    .chart-card { border-radius: 10px; border: 2px solid #e2e8f0; padding: 10px 12px; cursor: pointer; transition: border-color .2s, box-shadow .2s; background: #fafbff; }
+    .chart-card:hover { border-color: #93c5fd; }
+    .chart-card.c-active { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.13); background: white; }
+    .chart-card.c-active .c-edit-lbl { display: inline; }
+    .c-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; }
+    .c-sym { font-weight: 700; font-size: 0.76rem; color: #1e293b; direction: ltr; }
+    .c-edit-lbl { display: none; font-size: 0.58rem; background: #3b82f6; color: white; padding: 1px 5px; border-radius: 4px; }
+    .c-price { font-size: 0.7rem; font-variant-numeric: tabular-nums; color: #64748b; direction: ltr; }
+    .c-ret { font-size: 0.67rem; font-weight: 700; direction: ltr; }
+
+    .note-box { background: #f8fafc; border-right: 3px solid #94a3b8; padding: 6px 10px; font-size: 0.67rem; color: #64748b; border-radius: 0 5px 5px 0; margin-bottom: 11px; }
+    .legend { background: white; border-radius: 9px; padding: 10px 14px; font-size: 0.68rem; color: #64748b; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 13px; }
+    .li { display: flex; align-items: center; gap: 4px; }
+    .ld { width: 8px; height: 8px; border-radius: 50%; }
+    .loading-ovl { text-align: center; padding: 36px; color: #94a3b8; }
+    .spinner { width: 26px; height: 26px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 10px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .rst-btn { margin-right: auto; background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; padding: 3px 9px; border-radius: 6px; cursor: pointer; font-size: 0.67rem; }
+    .rst-btn:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+    @media (max-width: 1100px) { .charts-fx-row,.charts-idx-row { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 700px)  { .charts-fx-row,.charts-idx-row { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 600px) {
+      .main,.header,.sessions-bar,.world-clocks { padding-left:12px;padding-right:12px; }
+      .rtbl { font-size: 0.7rem; } .rtbl td,.rtbl th { padding: 5px 3px; }
+      .spcol { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="header-title">📈 דשבורד שוק הון ומט"ח</div>
+    <div class="header-sub">Yahoo Finance · נרות שעתיים · Bid/Ask · תשואות לפי סשן</div>
+  </div>
+  <div class="hright">
+    <div>
+      <div class="main-clock" id="mainClock">--:--:--</div>
+      <div class="date-lbl" id="dateLbl">--</div>
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()">⟳ רענן</button>
+  </div>
+</div>
+
+<!-- WORLD CLOCKS -->
+<div class="world-clocks">
+  <div class="wc" id="wc-tlv"><div class="wc-city">🇮🇱 תל אביב</div><div class="wc-time">--:--</div><div class="wc-tz">IST</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-lon"><div class="wc-city">🇬🇧 לונדון</div>  <div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-fra"><div class="wc-city">🇩🇪 פרנקפורט</div><div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-nyc"><div class="wc-city">🇺🇸 ניו יורק</div><div class="wc-time">--:--</div><div class="wc-tz">--</div><div class="wc-st mkt-closed">--</div></div>
+  <div class="wc" id="wc-tok"><div class="wc-city">🇯🇵 טוקיו</div>   <div class="wc-time">--:--</div><div class="wc-tz">JST</div><div class="wc-st mkt-closed">--</div></div>
+</div>
+
+<div id="closedBanner" class="closed-banner">
+  📅 <strong>שוק סגור</strong> — מוצגים נתוני <strong id="closedDayLbl">יום שישי</strong>. תשואות מחושבות מפתיחת כל סשן לסגירתו.
+</div>
+
+<div class="sessions-bar">
+  <div class="schip s-asia"   id="chip-asia">  <span class="dot"></span>אסיה   <span style="opacity:.55;font-size:.61rem;margin-right:2px">02:00–10:00</span></div>
+  <div class="schip s-europe" id="chip-europe"><span class="dot"></span>אירופה <span style="opacity:.55;font-size:.61rem;margin-right:2px">10:00–19:00</span></div>
+  <div class="schip s-us"     id="chip-us">    <span class="dot"></span>ארה"ב  <span style="opacity:.55;font-size:.61rem;margin-right:2px">16:30–23:00</span></div>
+  <div class="block-chip" id="blockChip">—</div>
+</div>
+
+<div class="main">
+  <div class="sbar">
+    <div class="sdot" id="sdot"></div>
+    <span id="stxt">מתחבר...</span>
+    <button class="rst-btn" onclick="clearHistory()">↺ נקה היסטוריה</button>
+  </div>
+  <div id="errBox" class="err-box" style="display:none"></div>
+  <div id="corsBox" style="display:none;background:#fffbeb;border:2px solid #f59e0b;border-radius:9px;padding:13px 16px;margin-bottom:11px;font-size:0.78rem;color:#78350f;line-height:1.7">
+    <strong>⚠️ בעיית CORS (file://)</strong> — הדפדפן חוסם בקשות ל-Yahoo Finance.<br>
+    <strong>לחץ פעמיים על <code>run_dashboard.bat</code></strong> כדי לפתוח דרך שרת מקומי.
+  </div>
+  <div id="diagBox" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:11px 14px;margin-bottom:11px;font-size:0.72rem;color:#475569;font-family:monospace;max-height:180px;overflow-y:auto">
+    <strong style="font-family:sans-serif;color:#334155">🔍 אבחון חיבור:</strong><br>
+    <span id="diagLog"></span>
+  </div>
+  <div id="loadDiv" class="loading-ovl"><div class="spinner"></div><div>טוען נרות שעתיים...</div></div>
+
+  <div id="mainContent" style="display:none">
+    <div class="note-box">
+      💡 <strong>Bid</strong> (אדום) = מכירה &nbsp;|&nbsp; <strong>Ask</strong> (ירוק) = קניה &nbsp;|&nbsp;
+      תשואות = % שינוי מפתיחת הסשן &nbsp;|&nbsp;
+      <strong>לחץ על שורה</strong> לעדכון הגרף הפעיל (כחול) בסקציה המתאימה
+    </div>
+
+    <!-- ═══ FX ═══ -->
+    <div class="card">
+      <div class="card-title">
+        💱 מט"ח
+        <span class="badge" id="fxUpdLbl">--</span>
+        <span class="badge badge-warn" id="closedBadge" style="display:none">שוק סגור</span>
+        <span class="card-hint">לחץ על שורה → מופיע בגרף הנבחר (כחול)</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="rtbl">
+          <thead><tr>
+            <th>זוג</th>
+            <th style="direction:ltr;text-align:left">Bid / Ask</th>
+            <th>ספרד</th>
+            <th><span class="ch ch-a">אסיה</span></th>
+            <th><span class="ch ch-e">אירופה</span></th>
+            <th><span class="ch ch-u">ארה"ב</span></th>
+            <th><span class="ch ch-3">3ש</span></th>
+            <th><span class="ch ch-24">24ש</span></th>
+          </tr></thead>
+          <tbody id="fxBody"></tbody>
+        </table>
+      </div>
+      <!-- FX CHARTS (4 slots) -->
+      <div class="charts-row charts-fx-row" id="fxCharts" style="margin-top:14px"></div>
+    </div>
+
+    <!-- ═══ INDICES ═══ -->
+    <div class="card">
+      <div class="card-title">
+        📊 מדדי מניות
+        <span class="badge" id="idxUpdLbl">--</span>
+        <span class="card-hint">לחץ על שורה → מופיע בגרף הנבחר (כחול)</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="rtbl">
+          <thead><tr>
+            <th>מדד</th>
+            <th style="direction:ltr;text-align:left">מחיר</th>
+            <th><span class="ch ch-a">אסיה</span></th>
+            <th><span class="ch ch-e">אירופה</span></th>
+            <th><span class="ch ch-u">ארה"ב</span></th>
+            <th><span class="ch ch-3">3ש</span></th>
+            <th><span class="ch ch-24">24ש</span></th>
+          </tr></thead>
+          <tbody id="idxBody"></tbody>
+        </table>
+      </div>
+      <!-- IDX CHARTS (3 slots) -->
+      <div class="charts-row charts-idx-row" id="idxCharts" style="margin-top:14px"></div>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="legend">
+      <span style="font-weight:700;color:#334155">סשנים (IST=UTC+3):</span>
+      <div class="li"><div class="ld" style="background:#f59e0b"></div>אסיה 02–10</div>
+      <div class="li"><div class="ld" style="background:#3b82f6"></div>אירופה 10–19</div>
+      <div class="li"><div class="ld" style="background:#10b981"></div>ארה"ב 16:30–23</div>
+      <div class="li"><div class="ld" style="background:#8b5cf6"></div>3 שעות</div>
+      <span style="font-size:.62rem;color:#94a3b8">מקור: Yahoo Finance | Proxy: corsproxy.io / allorigins.win</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════════
+const PAIRS = [
+  { sym:'USD/ILS', yfSym:'USDILS=X', flags:'🇺🇸🇮🇱', dec:4, spreadPips:30, pipVal:0.0001  },
+  { sym:'EUR/ILS', yfSym:'EURILS=X', flags:'🇪🇺🇮🇱', dec:4, spreadPips:40, pipVal:0.0001  },
+  { sym:'GBP/ILS', yfSym:'GBPILS=X', flags:'🇬🇧🇮🇱', dec:4, spreadPips:50, pipVal:0.0001  },
+  { sym:'EUR/USD', yfSym:'EURUSD=X', flags:'🇪🇺🇺🇸', dec:5, spreadPips:8,  pipVal:0.00001 },
+  { sym:'GBP/USD', yfSym:'GBPUSD=X', flags:'🇬🇧🇺🇸', dec:5, spreadPips:12, pipVal:0.00001 },
+  { sym:'USD/JPY', yfSym:'USDJPY=X', flags:'🇺🇸🇯🇵', dec:3, spreadPips:8,  pipVal:0.001   },
+  { sym:'EUR/GBP', yfSym:'EURGBP=X', flags:'🇪🇺🇬🇧', dec:5, spreadPips:10, pipVal:0.00001 },
+];
+
+const INDICES = [
+  { sym:'S&P 500', yfSym:'^GSPC',    flag:'🇺🇸', region:'NYSE',   dec:0, color:'#3b82f6' },
+  { sym:'NASDAQ',  yfSym:'^IXIC',    flag:'🇺🇸', region:'NASDAQ', dec:0, color:'#8b5cf6' },
+  { sym:'TA-35',   yfSym:'^TA35.TA', flag:'🇮🇱', region:'TASE',   dec:0, color:'#f59e0b' },
+  { sym:'DAX',     yfSym:'^GDAXI',   flag:'🇩🇪', region:'XETRA',  dec:0, color:'#10b981' },
+  { sym:'Nikkei',  yfSym:'^N225',    flag:'🇯🇵', region:'TSE',    dec:0, color:'#ef4444' },
+];
+
+const ZONES = [
+  { id:'wc-tlv', tz:'Asia/Jerusalem',  mktOpen:{s:6.5, e:17.5} },
+  { id:'wc-lon', tz:'Europe/London',   mktOpen:{s:8,   e:16.5} },
+  { id:'wc-fra', tz:'Europe/Berlin',   mktOpen:{s:9,   e:17.5} },
+  { id:'wc-nyc', tz:'America/New_York',mktOpen:{s:9.5, e:16}   },
+  { id:'wc-tok', tz:'Asia/Tokyo',      mktOpen:{s:9,   e:15.5} },
+];
+
+const SESSIONS = [
+  { id:'asia',   name:'אסיה',   color:'#f59e0b', openHourUTC:-1,   closeHourUTC:7  },
+  { id:'europe', name:'אירופה', color:'#3b82f6', openHourUTC:7,    closeHourUTC:16 },
+  { id:'us',     name:"ארה\"ב", color:'#10b981', openHourUTC:13.5, closeHourUTC:20 },
+];
+
+const ASSET_COLORS = {
+  'USD/ILS':'#3b82f6','EUR/ILS':'#f59e0b','GBP/ILS':'#10b981','EUR/USD':'#8b5cf6',
+  'GBP/USD':'#ef4444','USD/JPY':'#06b6d4','EUR/GBP':'#ec4899',
+  'S&P 500':'#3b82f6','NASDAQ':'#8b5cf6','TA-35':'#f59e0b','DAX':'#10b981','Nikkei':'#ef4444',
+};
+
+const IST = 3;
+
+// ═══════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════
+let allData     = {};
+let isClosedMkt = false;
+let refreshTimer= null;
+
+// FX charts: 4 slots
+let fxSlots      = ['USD/ILS','EUR/USD','GBP/USD','EUR/ILS','GBP/ILS'];
+let activeFxSlot = 0;
+let fxChartObjs  = {};   // slotIdx → Chart
+
+// Indices charts: 3 slots
+let idxSlots      = ['S&P 500','TA-35','NASDAQ','DAX','Nikkei'];
+let activeIdxSlot = 0;
+let idxChartObjs  = {};
+
+// Selected table rows
+let selFxRow  = null;
+let selIdxRow = null;
+
+// ═══════════════════════════════════════════════════════════════════════
+// TIME
+// ═══════════════════════════════════════════════════════════════════════
+const istNow     = () => new Date(Date.now() + IST*3600000);
+const utcHour    = () => { const n=new Date(); return n.getUTCHours()+n.getUTCMinutes()/60; };
+const isWeekend  = () => { const d=new Date().getUTCDay(); return d===0||d===6; };
+const lastTradingDay = () => {
+  const d=new Date().getUTCDay();
+  if(d===6) return new Date(Date.now()-86400000);
+  if(d===0) return new Date(Date.now()-2*86400000);
+  return new Date();
+};
+const dateFmt = d => d.toISOString().slice(0,10);
+
+function isSessionLive(sess) {
+  if (isClosedMkt) return false;
+  const h = utcHour();
+  if(sess.id==='asia')   return h>=23||h<7;
+  if(sess.id==='europe') return h>=7&&h<16;
+  if(sess.id==='us')     return h>=13.5&&h<20;
+  return false;
+}
+
+function block3hLabel() {
+  const ist=istNow(),h=ist.getUTCHours(),b=Math.floor(h/3),s=b*3,e=(s+3)%24;
+  const p=n=>n.toString().padStart(2,'0');
+  return `${p(s)}:00–${p(e)}:00`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// WORLD CLOCKS
+// ═══════════════════════════════════════════════════════════════════════
+function getZoneTime(tz) {
+  return new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
+}
+function getZoneTZ(tz) {
+  return new Intl.DateTimeFormat('en-GB',{timeZone:tz,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')?.value||'';
+}
+function getLocalHour(tz) {
+  const fmt=new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour:'numeric',minute:'numeric',hour12:false});
+  const pts=fmt.formatToParts(new Date());
+  return parseInt(pts.find(p=>p.type==='hour')?.value||0)+parseInt(pts.find(p=>p.type==='minute')?.value||0)/60;
+}
+function updateWorldClocks() {
+  const wd=new Date().getUTCDay(),isWD=wd>=1&&wd<=5;
+  ZONES.forEach(z=>{
+    const el=document.getElementById(z.id);if(!el)return;
+    el.querySelector('.wc-time').textContent=getZoneTime(z.tz);
+    el.querySelector('.wc-tz').textContent=getZoneTZ(z.tz);
+    const lh=getLocalHour(z.tz),open=isWD&&lh>=z.mktOpen.s&&lh<z.mktOpen.e;
+    const st=el.querySelector('.wc-st');
+    st.textContent=open?'● פתוח':'● סגור';
+    st.className='wc-st '+(open?'mkt-open':'mkt-closed');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// YAHOO FINANCE FETCH
+// key fix: DON'T encode the yfSym in the base URL — Yahoo needs literal = and ^
+// Only encode the full base URL when passing to CORS proxies
+// ═══════════════════════════════════════════════════════════════════════
+function parseYFJson(json) {
+  const res=json?.chart?.result?.[0];
+  if(!res?.timestamp) throw new Error('no data');
+  const q=res.indicators.quote[0];
+  return res.timestamp
+    .map((t,i)=>({ts:t*1000,open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i]}))
+    .filter(c=>c.close!=null&&c.open!=null);
+}
+
+let _diagLines = [];
+function diagLog(msg) {
+  _diagLines.push(msg);
+  const el = document.getElementById('diagLog');
+  if (el) el.innerHTML = _diagLines.slice(-20).join('<br>');
+  // Show diag box only if all attempts for a symbol failed (no ✅ found yet)
+  if (msg.startsWith('❌') && !_diagLines.some(l=>l.startsWith('✅'))) {
+    document.getElementById('diagBox').style.display = 'block';
+  }
+  console.log('[diag]', msg);
+}
+
+async function fetchYF(yfSym) {
+  // Always try /api/chart/ first — works from localhost AND tunnel URLs
+  try {
+    const r = await fetch(`/api/chart/${encodeURIComponent(yfSym)}`, { cache:'no-cache' });
+    if (r.ok) {
+      const json = await r.json();
+      if (!json.error) {
+        const result = parseYFJson(json);
+        diagLog(`✅ ${yfSym}: local proxy OK (${result.length} candles)`);
+        return result;
+      }
+    }
+  } catch(e) { /* fall through to proxy chain */ }
+
+  // file:// fallback — try multiple public proxies
+  const b1 = `https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?interval=1h&range=5d`;
+  const b2 = b1.replace('query1','query2');
+  const bCorsDomain = b2 + '&corsDomain=finance.yahoo.com';
+  const E = encodeURIComponent;
+  const attempts = [
+    ['corsDomain direct', () => fetch(bCorsDomain, { cache:'no-cache' })],
+    ['corsproxy q1',      () => fetch(`https://corsproxy.io/?${E(b1)}`, { cache:'no-cache' })],
+    ['corsproxy q2',      () => fetch(`https://corsproxy.io/?${E(b2)}`, { cache:'no-cache' })],
+    ['allorigins',        () => fetch(`https://api.allorigins.win/raw?url=${E(b1)}`, { cache:'no-cache' })],
+    ['thingproxy',        () => fetch(`https://thingproxy.freeboard.io/fetch/${b1}`, { cache:'no-cache' })],
+  ];
+  let lastErr = '';
+  for (const [label, fn] of attempts) {
+    try {
+      diagLog(`🟡 ${yfSym} [${label}]...`);
+      const r = await fn();
+      if (!r.ok) { lastErr=`HTTP ${r.status}`; diagLog(`❌ ${yfSym} [${label}]: ${lastErr}`); continue; }
+      const ct = r.headers.get('content-type')||'';
+      if (!ct.includes('json') && !ct.includes('text')) { lastErr=`bad content-type: ${ct}`; diagLog(`❌ ${yfSym} [${label}]: ${lastErr}`); continue; }
+      const json = await r.json();
+      const result = parseYFJson(json);
+      diagLog(`✅ ${yfSym} [${label}]: OK (${result.length} candles)`);
+      return result;
+    } catch(e) { lastErr=e.message; diagLog(`❌ ${yfSym} [${label}]: ${e.message}`); }
+  }
+  throw new Error(`${yfSym}: ${lastErr}`);
+}
+
+async function fetchGroup(items) {
+  const out={};
+  await Promise.allSettled(items.map(async item=>{
+    try { out[item.sym]=await fetchYF(item.yfSym); }
+    catch(e) { console.error(item.sym,e.message); out[item.sym]=[]; }
+  }));
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RETURN CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════
+const latestRate = c=>c?.length?c[c.length-1].close:null;
+const latestTs   = c=>c?.length?c[c.length-1].ts:Date.now();
+const pctRet=(cur,base)=>(cur==null||base==null||base===0)?null:((cur-base)/base)*100;
+
+function calcSessionReturn(candles,sess,tradingDate) {
+  if(!candles?.length) return null;
+  const tDay=new Date(tradingDate+'T00:00:00Z').getTime();
+  let openTs,closeTs;
+  if(sess.id==='asia'){openTs=tDay-86400000+23*3600000;closeTs=tDay+7*3600000;}
+  else{openTs=tDay+sess.openHourUTC*3600000;closeTs=tDay+sess.closeHourUTC*3600000;}
+  if(isSessionLive(sess)) closeTs=Date.now();
+  const openC=candles.find(c=>c.ts>=openTs&&c.ts<closeTs);
+  if(!openC) return null;
+  const inW=candles.filter(c=>c.ts>=openTs&&c.ts<=closeTs);
+  return inW.length?pctRet(inW[inW.length-1].close,openC.open):null;
+}
+function calc3hReturn(candles){
+  const ref=latestTs(candles),from=ref-3*3600000;
+  const w=candles.filter(c=>c.ts>=from&&c.ts<=ref);
+  return w.length?pctRet(w[w.length-1].close,w[0].open):null;
+}
+function calc24hReturn(candles){
+  const ref=latestTs(candles),from=ref-24*3600000;
+  const w=candles.filter(c=>c.ts>=from&&c.ts<=ref);
+  return w.length?pctRet(w[w.length-1].close,w[0].open):null;
+}
+function getBidAsk(mid,pair){
+  const h=(pair.spreadPips*pair.pipVal)/2;
+  return{bid:mid-h,ask:mid+h};
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════════════════════════════
+function saveHistory(rates){
+  let h=[];try{h=JSON.parse(localStorage.getItem('fx_hist'))||[];}catch{}
+  h.push({ts:Date.now(),rates});if(h.length>96)h=h.slice(-96);
+  localStorage.setItem('fx_hist',JSON.stringify(h));
+}
+function clearHistory(){localStorage.removeItem('fx_hist');alert('היסטוריה נוקתה');}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FORMAT
+// ═══════════════════════════════════════════════════════════════════════
+const fmt  =(v,d)=>v==null?'—':v.toFixed(d);
+const fmtR = p=>p==null?null:`${p>=0?'+':''}${p.toFixed(2)}%`;
+const rCls = p=>p==null?'rna':Math.abs(p)<0.001?'rzero':p>0?'rpos':'rneg';
+const arr  = p=>(p==null||Math.abs(p)<0.001)?'':p>0?'▲':'▼';
+const pill = p=>p==null?`<span class="rpill rna">—</span>`:`<span class="rpill ${rCls(p)}">${arr(p)} ${fmtR(p)}</span>`;
+const fmtN =(v,d)=>v==null?'—':new Intl.NumberFormat('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}).format(v);
+
+// ═══════════════════════════════════════════════════════════════════════
+// CHART RENDERING
+// ═══════════════════════════════════════════════════════════════════════
+function makeChart(canvasId, candles, color, dec) {
+  const canvas=document.getElementById(canvasId);
+  if(!canvas) return null;
+  const recent=candles.slice(-48);
+  const toIST=ts=>{const d=new Date(ts+IST*3600000);return`${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')}`;};
+  return new Chart(canvas,{
+    type:'line',
+    data:{labels:recent.map(c=>toIST(c.ts)),datasets:[{data:recent.map(c=>c.close),borderColor:color,backgroundColor:color+'18',borderWidth:1.8,pointRadius:0,pointHoverRadius:3,fill:true,tension:0.3,spanGaps:true}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>` ${c.parsed.y!=null?c.parsed.y.toFixed(dec):'—'}`}}},
+      scales:{x:{display:false},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:8},color:'#94a3b8',maxTicksLimit:3}}}
+    }
+  });
+}
+
+function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick) {
+  const container=document.getElementById(containerId);
+  if(!container) return;
+  container.innerHTML='';
+
+  slots.forEach((sym,i)=>{
+    const candles=allData[sym]||[];
+    const mid=latestRate(candles);
+    const color=ASSET_COLORS[sym]||'#3b82f6';
+    const ret24=calc24hReturn(candles);
+    const rc=ret24==null?'#94a3b8':ret24>0?'#16a34a':'#dc2626';
+
+    // Determine display decimals: 2 for bid/ask display, full for chart tooltip
+    const pair=PAIRS.find(p=>p.sym===sym);
+    const idx=INDICES.find(p=>p.sym===sym);
+    const displayDec = pair?2 : idx?idx.dec:2;
+    const tooltipDec = pair?pair.dec : idx?idx.dec:4;
+
+    const card=document.createElement('div');
+    card.className=`chart-card${i===activeSlot?' c-active':''}`;
+    card.id=`card_${containerId}_${i}`;
+    card.onclick=()=>onSlotClick(i);
+    card.innerHTML=`
+      <div class="c-hdr">
+        <span class="c-sym">${sym}</span>
+        <span class="c-edit-lbl">נבחר</span>
+      </div>
+      <div class="c-price">${mid!=null?fmt(mid,displayDec):'—'}</div>
+      <div class="c-ret" style="color:${rc}">${ret24!=null?`${arr(ret24)} ${fmtR(ret24)}`:''}</div>
+      <div style="height:70px;position:relative;margin-top:5px"><canvas id="cv_${containerId}_${i}"></canvas></div>`;
+    container.appendChild(card);
+
+    // Destroy old chart
+    if(chartStore[i]){chartStore[i].destroy();delete chartStore[i];}
+    if(candles.length) {
+      setTimeout(()=>{
+        chartStore[i]=makeChart(`cv_${containerId}_${i}`,candles,color,tooltipDec);
+      },30);
+    }
+  });
+}
+
+function renderFxCharts() {
+  renderChartCard('fxCharts', fxChartObjs, fxSlots, activeFxSlot, i=>{
+    activeFxSlot=i;
+    // Update active card styling only
+    document.querySelectorAll('#fxCharts .chart-card').forEach((c,idx)=>{
+      c.className=`chart-card${idx===activeFxSlot?' c-active':''}`;
+    });
+  });
+}
+
+function renderIdxCharts() {
+  renderChartCard('idxCharts', idxChartObjs, idxSlots, activeIdxSlot, i=>{
+    activeIdxSlot=i;
+    document.querySelectorAll('#idxCharts .chart-card').forEach((c,idx)=>{
+      c.className=`chart-card${idx===activeIdxSlot?' c-active':''}`;
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ROW CLICK → assign to active chart slot
+// ═══════════════════════════════════════════════════════════════════════
+function fxRowClick(tr, sym) {
+  if(selFxRow) selFxRow.classList.remove('row-sel');
+  tr.classList.add('row-sel'); selFxRow=tr;
+  fxSlots[activeFxSlot]=sym;
+  renderFxCharts();
+  activeFxSlot=(activeFxSlot+1)%fxSlots.length;
+}
+
+function idxRowClick(tr, sym) {
+  if(selIdxRow) selIdxRow.classList.remove('row-sel');
+  tr.classList.add('row-sel'); selIdxRow=tr;
+  idxSlots[activeIdxSlot]=sym;
+  renderIdxCharts();
+  activeIdxSlot=(activeIdxSlot+1)%idxSlots.length;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RENDER FX TABLE
+// ═══════════════════════════════════════════════════════════════════════
+function renderForex(td) {
+  const tbody=document.getElementById('fxBody');tbody.innerHTML='';
+  PAIRS.forEach(pair=>{
+    const candles=allData[pair.sym]||[];
+    const mid=latestRate(candles);
+    if(mid==null){
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td class="pair-cell">${pair.flags} ${pair.sym}</td><td colspan="7" style="color:#94a3b8;font-size:.72rem">אין נתונים (Yahoo Finance)</td>`;
+      tbody.appendChild(tr);return;
+    }
+    const {bid,ask}=getBidAsk(mid,pair);
+    const sR=SESSIONS.map(s=>calcSessionReturn(candles,s,td));
+    const r3=calc3hReturn(candles),r24=calc24hReturn(candles);
+    const tr=document.createElement('tr');
+    tr.className='clickable';
+    tr.innerHTML=`
+      <td class="pair-cell">${pair.flags} ${pair.sym}</td>
+      <td class="ba-cell">
+        <div class="ba-lbl" style="direction:ltr">BID &nbsp; ASK</div>
+        <span class="bid-v">${fmt(bid,pair.dec)}</span>
+        <span style="color:#e2e8f0;margin:0 2px">|</span>
+        <span class="ask-v">${fmt(ask,pair.dec)}</span>
+      </td>
+      <td style="text-align:center"><span class="spd-v">${pair.spreadPips}p</span></td>
+      ${SESSIONS.map((s,si)=>`<td class="ret-cell" style="${isSessionLive(s)?`border-right:3px solid ${s.color};`:''}">${pill(sR[si])}</td>`).join('')}
+      <td class="ret-cell">${pill(r3)}</td>
+      <td class="ret-cell">${pill(r24)}</td>`;
+    tr.onclick=()=>fxRowClick(tr,pair.sym);
+    tbody.appendChild(tr);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RENDER INDICES TABLE
+// ═══════════════════════════════════════════════════════════════════════
+function renderIndices(td) {
+  const tbody=document.getElementById('idxBody');tbody.innerHTML='';
+  const firstC=INDICES.map(idx=>allData[idx.sym]||[]).find(c=>c.length);
+  if(firstC){
+    const d=new Date(firstC[firstC.length-1].ts+IST*3600000);
+    document.getElementById('idxUpdLbl').textContent=`עד ${d.toISOString().slice(0,10)} ${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')} IST`;
+  }
+  INDICES.forEach(idx=>{
+    const candles=allData[idx.sym]||[];
+    const price=latestRate(candles);
+    if(price==null){
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td class="pair-cell">${idx.flag} ${idx.sym}</td><td colspan="6" style="color:#94a3b8;font-size:.72rem">אין נתונים</td>`;
+      tbody.appendChild(tr);return;
+    }
+    const sR=SESSIONS.map(s=>calcSessionReturn(candles,s,td));
+    const r3=calc3hReturn(candles),r24=calc24hReturn(candles);
+    const rc=r24==null?'#94a3b8':r24>0?'#16a34a':'#dc2626';
+    const tr=document.createElement('tr');
+    tr.className='clickable';
+    tr.innerHTML=`
+      <td class="pair-cell">${idx.flag} ${idx.sym} <span style="font-size:.63rem;color:#94a3b8;font-weight:400">${idx.region}</span></td>
+      <td class="price-cell" style="direction:ltr;text-align:left">
+        ${fmtN(price,idx.dec)}
+        <span style="font-size:.67rem;color:${rc};font-weight:700;margin-right:6px">${r24!=null?`${arr(r24)} ${fmtR(r24)}`:''}</span>
+      </td>
+      ${SESSIONS.map((s,si)=>`<td class="ret-cell" style="${isSessionLive(s)?`border-right:3px solid ${s.color};`:''}">${pill(sR[si])}</td>`).join('')}
+      <td class="ret-cell">${pill(r3)}</td>
+      <td class="ret-cell">${pill(r24)}</td>`;
+    tr.onclick=()=>idxRowClick(tr,idx.sym);
+    tbody.appendChild(tr);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════════════════════════════
+function renderAll() {
+  const ltd=lastTradingDay();
+  const anyFX=PAIRS.map(p=>allData[p.sym]||[]).find(c=>c.length);
+  isClosedMkt=anyFX?(Date.now()-anyFX[anyFX.length-1].ts)>10*3600000:isWeekend();
+
+  document.getElementById('closedBanner').style.display=isClosedMkt?'flex':'none';
+  document.getElementById('closedBadge').style.display=isClosedMkt?'inline':'none';
+  if(isClosedMkt){
+    const days=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+    document.getElementById('closedDayLbl').textContent=`יום ${days[ltd.getUTCDay()]} (${dateFmt(ltd)})`;
+  }
+  if(anyFX){
+    const d=new Date(anyFX[anyFX.length-1].ts+IST*3600000);
+    document.getElementById('fxUpdLbl').textContent=`עד ${d.toISOString().slice(0,10)} ${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')} IST`;
+  }
+
+  const td=dateFmt(ltd);
+  renderForex(td);
+  renderIndices(td);
+  renderFxCharts();
+  renderIdxCharts();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CLOCK LOOP
+// ═══════════════════════════════════════════════════════════════════════
+function updateClock(){
+  const ist=istNow();
+  const hh=ist.getUTCHours().toString().padStart(2,'0');
+  const mm=ist.getUTCMinutes().toString().padStart(2,'0');
+  const ss=ist.getUTCSeconds().toString().padStart(2,'0');
+  document.getElementById('mainClock').textContent=`${hh}:${mm}:${ss}`;
+  document.getElementById('dateLbl').textContent=ist.toISOString().slice(0,10)+' IST';
+  SESSIONS.forEach(s=>{const c=document.getElementById('chip-'+s.id);if(c)c.className=`schip s-${s.id}${isSessionLive(s)?' active':''}`;});
+  document.getElementById('blockChip').textContent=`⏱ בלוק 3ש: ${block3hLabel()}`;
+  updateWorldClocks();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FETCH & LOOP
+// ═══════════════════════════════════════════════════════════════════════
+async function fetchAndRender(showLoader=false){
+  const dot=document.getElementById('sdot'),txt=document.getElementById('stxt'),err=document.getElementById('errBox');
+  if(showLoader){document.getElementById('loadDiv').style.display='block';document.getElementById('mainContent').style.display='none';}
+  dot.className='sdot loading';txt.textContent='מושך נרות שעתיים מ-Yahoo Finance...';document.getElementById('refreshBtn').disabled=true;
+  try{
+    const[fx,idx]=await Promise.all([fetchGroup(PAIRS),fetchGroup(INDICES)]);
+    allData={...fx,...idx};
+    const snap={};Object.entries(allData).forEach(([sym,c])=>{const r=latestRate(c);if(r)snap[sym]=r;});
+    if(Object.keys(snap).length)saveHistory(snap);
+    err.style.display='none';
+    document.getElementById('loadDiv').style.display='none';
+    document.getElementById('mainContent').style.display='block';
+    renderAll();
+    dot.className=isClosedMkt?'sdot closed':'sdot live';
+    txt.textContent=isClosedMkt?'שוק סגור · Yahoo Finance · עדכון הבא בעוד 20 דקות':'נרות שעתיים חיים · Yahoo Finance · עדכון הבא בעוד 5 דקות';
+  }catch(e){
+    console.error(e);
+    const isFileProto = location.protocol === 'file:';
+    err.style.display='block';
+    err.innerHTML=`⚠️ שגיאה: ${e.message}${isFileProto?' — נסה להריץ דרך <strong>run_dashboard.bat</strong>':''}`;
+    if(isFileProto) document.getElementById('corsBox').style.display='block';
+    dot.className='sdot error';txt.textContent='שגיאה בטעינת נתונים';
+    if(Object.keys(allData).length){document.getElementById('loadDiv').style.display='none';document.getElementById('mainContent').style.display='block';renderAll();}
+  }finally{document.getElementById('refreshBtn').disabled=false;}
+}
+
+function manualRefresh(){clearTimeout(refreshTimer);fetchAndRender(false).then(scheduleNext);}
+function scheduleNext(){
+  clearTimeout(refreshTimer);
+  refreshTimer=setTimeout(()=>fetchAndRender(false).then(scheduleNext),isClosedMkt?20*60*1000:5*60*1000);
+}
+
+// INIT
+setInterval(updateClock,1000);
+updateClock();
+fetchAndRender(true).then(scheduleNext);
+</script>
+</body>
+</html>
