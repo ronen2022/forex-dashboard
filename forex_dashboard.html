@@ -252,22 +252,25 @@
 // ═══════════════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════════════
+const fi = c => `<img src="https://flagcdn.com/20x15/${c}.png" style="height:13px;vertical-align:middle;border-radius:1px;margin:0 1px" loading="lazy">`;
+const ff = (a,b) => fi(a)+fi(b);
+
 const PAIRS = [
-  { sym:'USD/ILS', yfSym:'USDILS=X', flags:'🇺🇸🇮🇱', dec:4, spreadPips:30, pipVal:0.0001  },
-  { sym:'EUR/ILS', yfSym:'EURILS=X', flags:'🇪🇺🇮🇱', dec:4, spreadPips:40, pipVal:0.0001  },
-  { sym:'GBP/ILS', yfSym:'GBPILS=X', flags:'🇬🇧🇮🇱', dec:4, spreadPips:50, pipVal:0.0001  },
-  { sym:'EUR/USD', yfSym:'EURUSD=X', flags:'🇪🇺🇺🇸', dec:5, spreadPips:8,  pipVal:0.00001 },
-  { sym:'GBP/USD', yfSym:'GBPUSD=X', flags:'🇬🇧🇺🇸', dec:5, spreadPips:12, pipVal:0.00001 },
-  { sym:'USD/JPY', yfSym:'USDJPY=X', flags:'🇺🇸🇯🇵', dec:3, spreadPips:8,  pipVal:0.001   },
-  { sym:'EUR/GBP', yfSym:'EURGBP=X', flags:'🇪🇺🇬🇧', dec:5, spreadPips:10, pipVal:0.00001 },
+  { sym:'USD/ILS', yfSym:'USDILS=X', flags:ff('us','il'), dec:4, spreadPips:30, pipVal:0.0001  },
+  { sym:'EUR/ILS', yfSym:'EURILS=X', flags:ff('eu','il'), dec:4, spreadPips:40, pipVal:0.0001  },
+  { sym:'GBP/ILS', yfSym:'GBPILS=X', flags:ff('gb','il'), dec:4, spreadPips:50, pipVal:0.0001  },
+  { sym:'EUR/USD', yfSym:'EURUSD=X', flags:ff('eu','us'), dec:5, spreadPips:8,  pipVal:0.00001 },
+  { sym:'GBP/USD', yfSym:'GBPUSD=X', flags:ff('gb','us'), dec:5, spreadPips:12, pipVal:0.00001 },
+  { sym:'USD/JPY', yfSym:'USDJPY=X', flags:ff('us','jp'), dec:3, spreadPips:8,  pipVal:0.001   },
+  { sym:'EUR/GBP', yfSym:'EURGBP=X', flags:ff('eu','gb'), dec:5, spreadPips:10, pipVal:0.00001 },
 ];
 
 const INDICES = [
-  { sym:'S&P 500', yfSym:'^GSPC',    flag:'🇺🇸', region:'NYSE',   dec:0, color:'#3b82f6' },
-  { sym:'NASDAQ',  yfSym:'^IXIC',    flag:'🇺🇸', region:'NASDAQ', dec:0, color:'#8b5cf6' },
-  { sym:'TA-35',   yfSym:'^TA35.TA', flag:'🇮🇱', region:'TASE',   dec:0, color:'#f59e0b' },
-  { sym:'DAX',     yfSym:'^GDAXI',   flag:'🇩🇪', region:'XETRA',  dec:0, color:'#10b981' },
-  { sym:'Nikkei',  yfSym:'^N225',    flag:'🇯🇵', region:'TSE',    dec:0, color:'#ef4444' },
+  { sym:'S&P 500', yfSym:'^GSPC',    flag:fi('us'), region:'NYSE',   dec:0, color:'#3b82f6' },
+  { sym:'NASDAQ',  yfSym:'^IXIC',    flag:fi('us'), region:'NASDAQ', dec:0, color:'#8b5cf6' },
+  { sym:'TA-35',   yfSym:'^TA35.TA', flag:fi('il'), region:'TASE',   dec:0, color:'#f59e0b' },
+  { sym:'DAX',     yfSym:'^GDAXI',   flag:fi('de'), region:'XETRA',  dec:0, color:'#10b981' },
+  { sym:'Nikkei',  yfSym:'^N225',    flag:fi('jp'), region:'TSE',    dec:0, color:'#ef4444' },
 ];
 
 const ZONES = [
@@ -388,10 +391,6 @@ function diagLog(msg) {
   _diagLines.push(msg);
   const el = document.getElementById('diagLog');
   if (el) el.innerHTML = _diagLines.slice(-20).join('<br>');
-  // Show diag box only if all attempts for a symbol failed (no ✅ found yet)
-  if (msg.startsWith('❌') && !_diagLines.some(l=>l.startsWith('✅'))) {
-    document.getElementById('diagBox').style.display = 'block';
-  }
   console.log('[diag]', msg);
 }
 
@@ -541,9 +540,10 @@ function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick
     card.className=`chart-card${i===activeSlot?' c-active':''}`;
     card.id=`card_${containerId}_${i}`;
     card.onclick=()=>onSlotClick(i);
+    const flagStr = (()=>{const p=PAIRS.find(x=>x.sym===sym);if(p)return p.flags+' ';const id=INDICES.find(x=>x.sym===sym);return id?id.flag+' ':''})();
     card.innerHTML=`
       <div class="c-hdr">
-        <span class="c-sym">${sym}</span>
+        <span class="c-sym">${flagStr}${sym}</span>
         <span class="c-edit-lbl">נבחר</span>
       </div>
       <div class="c-price">${mid!=null?fmt(mid,displayDec):'—'}</div>
