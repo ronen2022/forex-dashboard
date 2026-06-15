@@ -263,7 +263,7 @@ const PAIRS = [
   { sym:'GBP/ILS', yfSym:'GBPILS=X', flags:ff('gb','il'), dec:4, spreadPips:50, pipVal:0.0001  },
   { sym:'EUR/USD', yfSym:'EURUSD=X', flags:ff('eu','us'), dec:5, spreadPips:8,  pipVal:0.00001 },
   { sym:'GBP/USD', yfSym:'GBPUSD=X', flags:ff('gb','us'), dec:5, spreadPips:12, pipVal:0.00001 },
-  { sym:'USD/JPY', yfSym:'USDJPY=X', flags:ff('us','jp'), dec:3, spreadPips:8,  pipVal:0.001   },
+  { sym:'USD/JPY', yfSym:'USDJPY=X', flags:ff('us','jp'), dec:2, spreadPips:8,  pipVal:0.01    },
   { sym:'EUR/GBP', yfSym:'EURGBP=X', flags:ff('eu','gb'), dec:5, spreadPips:10, pipVal:0.00001 },
   { sym:'CHF/ILS', yfSym:'CHFILS=X', flags:ff('ch','il'), dec:4, spreadPips:50, pipVal:0.0001  },
 ];
@@ -274,6 +274,7 @@ const INDICES = [
   { sym:'TA-35',   yfSym:'^TA35.TA', flag:fi('il'), region:'TASE',   dec:0, color:'#f59e0b' },
   { sym:'DAX',     yfSym:'^GDAXI',   flag:fi('de'), region:'XETRA',  dec:0, color:'#10b981' },
   { sym:'Nikkei',  yfSym:'^N225',    flag:fi('jp'), region:'TSE',    dec:0, color:'#ef4444' },
+  { sym:'NQ Fut',  yfSym:'NQ=F',     flag:fi('us'), region:'CME',    dec:0, color:'#06b6d4' },
 ];
 
 const ZONES = [
@@ -508,14 +509,27 @@ const fmtN =(v,d)=>v==null?'—':new Intl.NumberFormat('en-US',{minimumFractionD
 function makeChart(canvasId, candles, color, dec) {
   const canvas=document.getElementById(canvasId);
   if(!canvas) return null;
-  const recent=candles.slice(-48);
+  // Find Asia session start (23:00 UTC = 02:00 IST) of most recent trading day
+  const now=new Date();
+  const asiaOpen=new Date(now);
+  asiaOpen.setUTCHours(23,0,0,0);
+  if(now.getUTCHours()<23) asiaOpen.setDate(asiaOpen.getDate()-1);
+  // Roll back over weekend
+  const dow=asiaOpen.getUTCDay();
+  if(dow===6) asiaOpen.setDate(asiaOpen.getDate()-1);
+  if(dow===0) asiaOpen.setDate(asiaOpen.getDate()-2);
+  let filtered=candles.filter(c=>c.ts>=asiaOpen.getTime());
+  if(filtered.length<3) filtered=candles.slice(-24);
   const toIST=ts=>{const d=new Date(ts+IST*3600000);return`${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')}`;};
   return new Chart(canvas,{
     type:'line',
-    data:{labels:recent.map(c=>toIST(c.ts)),datasets:[{data:recent.map(c=>c.close),borderColor:color,backgroundColor:color+'18',borderWidth:1.8,pointRadius:0,pointHoverRadius:3,fill:true,tension:0.3,spanGaps:true}]},
+    data:{labels:filtered.map(c=>toIST(c.ts)),datasets:[{data:filtered.map(c=>c.close),borderColor:color,backgroundColor:color+'18',borderWidth:1.8,pointRadius:0,pointHoverRadius:3,fill:true,tension:0.3,spanGaps:true}]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
       plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>` ${c.parsed.y!=null?c.parsed.y.toFixed(dec):'—'}`}}},
-      scales:{x:{display:false},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:8},color:'#94a3b8',maxTicksLimit:3}}}
+      scales:{
+        x:{display:true,ticks:{font:{size:7},color:'#94a3b8',maxTicksLimit:6,maxRotation:0},grid:{display:false}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:8},color:'#94a3b8',maxTicksLimit:3}}
+      }
     }
   });
 }
@@ -550,7 +564,7 @@ function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick
       </div>
       <div class="c-price">${mid!=null?fmt(mid,displayDec):'—'}</div>
       <div class="c-ret" style="color:${rc}">${ret24!=null?`${arr(ret24)} ${fmtR(ret24)}`:''}</div>
-      <div style="height:70px;position:relative;margin-top:5px"><canvas id="cv_${containerId}_${i}"></canvas></div>`;
+      <div style="height:85px;position:relative;margin-top:5px"><canvas id="cv_${containerId}_${i}"></canvas></div>`;
     container.appendChild(card);
 
     // Destroy old chart
