@@ -262,6 +262,27 @@
   </div>
 </div>
 
+<!-- FULLSCREEN MODAL -->
+<div id="chartModal" onclick="closeChartModal()" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:999;align-items:center;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:white;border-radius:14px;padding:16px;width:93vw;height:84vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,0.45)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-shrink:0">
+      <div>
+        <div id="modalTitle" style="font-weight:700;font-size:1.1rem;direction:ltr;color:#1e293b"></div>
+        <div id="modalSub" style="font-size:0.68rem;color:#94a3b8;margin-top:1px"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px">
+        <button class="tf-btn" id="mtf-15m" onclick="switchTF('15m')">15m</button>
+        <button class="tf-btn" id="mtf-30m" onclick="switchTF('30m')">30m</button>
+        <button class="tf-btn" id="mtf-1h"  onclick="switchTF('1h')">1h</button>
+        <button class="tf-btn" id="mtf-4h"  onclick="switchTF('4h')">4h</button>
+        <button class="tf-btn" id="mtf-1d"  onclick="switchTF('1d')">יום</button>
+        <button onclick="closeChartModal()" style="background:#f1f5f9;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1rem;color:#475569;margin-right:6px">✕</button>
+      </div>
+    </div>
+    <div id="modalChartDiv" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════════════════
 // CONFIG
@@ -623,7 +644,10 @@ function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick
     card.innerHTML=`
       <div class="c-hdr">
         <span class="c-sym">${flagStr}${sym}</span>
-        <span class="c-edit-lbl">נבחר</span>
+        <div style="display:flex;align-items:center;gap:3px">
+          <span class="c-edit-lbl">נבחר</span>
+          <button onclick="event.stopPropagation();openChartModal('${sym}')" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:0.85rem;padding:0 1px;line-height:1" title="פתח מסך מלא">⛶</button>
+        </div>
       </div>
       <div class="c-price">${mid!=null?fmt(mid,displayDec):'—'}</div>
       <div class="c-ret" style="color:${rc}">${ret24!=null?`${arr(ret24)} ${fmtR(ret24)}`:''}</div>
@@ -821,11 +845,66 @@ async function fetchAndRender(showLoader=false){
   }finally{document.getElementById('refreshBtn').disabled=false;}
 }
 
+let modalChart=null, modalSym=null;
+
+function openChartModal(sym){
+  modalSym=sym;
+  const candles=allData[sym]||[];
+  const pair=PAIRS.find(p=>p.sym===sym);
+  const idx=INDICES.find(p=>p.sym===sym);
+  const dec=pair?pair.dec:idx?idx.dec:2;
+  const flagStr=(()=>{const p=PAIRS.find(x=>x.sym===sym);if(p)return p.flags+' ';const id=INDICES.find(x=>x.sym===sym);return id?id.flag+' ':''})();
+  document.getElementById('modalTitle').innerHTML=flagStr+sym;
+  document.getElementById('modalSub').textContent=`נר: ${currentTF} · ${candles.length} נרות · IST`;
+  document.getElementById('chartModal').style.display='flex';
+  if(modalChart){try{modalChart.remove();}catch(e){}modalChart=null;}
+  const div=document.getElementById('modalChartDiv');
+  div.innerHTML='';
+  const tzOff=IST*3600;
+  const data=candles.filter(c=>c.open!=null&&c.close!=null).map(c=>({time:Math.floor(c.ts/1000)+tzOff,open:c.open,high:c.high??c.close,low:c.low??c.close,close:c.close}));
+  if(!data.length)return;
+  modalChart=LightweightCharts.createChart(div,{
+    width:div.clientWidth, height:div.clientHeight,
+    layout:{background:{type:'solid',color:'#ffffff'},textColor:'#334155',fontSize:12},
+    grid:{vertLines:{color:'#f1f5f9'},horzLines:{color:'#f1f5f9'}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Magnet},
+    rightPriceScale:{scaleMargins:{top:0.08,bottom:0.08},minimumWidth:65},
+    timeScale:{timeVisible:true,secondsVisible:false},
+    handleScale:true, handleScroll:true,
+  });
+  const series=modalChart.addCandlestickSeries({
+    upColor:'#16a34a',downColor:'#dc2626',
+    borderUpColor:'#16a34a',borderDownColor:'#dc2626',
+    wickUpColor:'#16a34a',wickDownColor:'#dc2626',
+    priceLineVisible:true,
+    priceFormat:{type:'price',precision:dec,minMove:Math.pow(10,-dec)},
+  });
+  series.setData(data);
+  modalChart.timeScale().fitContent();
+}
+
+function closeChartModal(){
+  document.getElementById('chartModal').style.display='none';
+  if(modalChart){try{modalChart.remove();}catch(e){}modalChart=null;}
+  document.getElementById('modalChartDiv').innerHTML='';
+  modalSym=null;
+}
+
+function syncTFButtons(tf){
+  document.querySelectorAll('.tf-btn').forEach(b=>{
+    const btnTf=b.id.replace('tf-','').replace('mtf-','');
+    b.classList.toggle('active',btnTf===tf);
+  });
+}
+
 function switchTF(tf){
   currentTF=tf;
-  document.querySelectorAll('.tf-btn').forEach(b=>b.classList.toggle('active',b.id===`tf-${tf}`));
+  syncTFButtons(tf);
   clearTimeout(refreshTimer);
-  fetchAndRender(false).then(scheduleNext);
+  fetchAndRender(false).then(()=>{
+    scheduleNext();
+    if(modalSym&&document.getElementById('chartModal').style.display!=='none') openChartModal(modalSym);
+  });
 }
 function manualRefresh(){clearTimeout(refreshTimer);fetchAndRender(false).then(scheduleNext);}
 function scheduleNext(){
@@ -836,6 +915,7 @@ function scheduleNext(){
 // INIT
 setInterval(updateClock,1000);
 updateClock();
+syncTFButtons(currentTF);
 fetchAndRender(true).then(scheduleNext);
 </script>
 </body>
