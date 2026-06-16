@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>דשבורד שוק הון ומט"ח</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -113,6 +116,9 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .rst-btn { margin-right: auto; background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; padding: 3px 9px; border-radius: 6px; cursor: pointer; font-size: 0.67rem; }
     .rst-btn:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+    .tf-btn { padding: 3px 10px; border-radius: 6px; font-size: 0.69rem; font-weight: 600; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; cursor: pointer; transition: all .15s; }
+    .tf-btn.active { background: #1e293b; color: white; border-color: #1e293b; }
+    .tf-btn:hover:not(.active) { background: #eff6ff; border-color: #93c5fd; color: #3b82f6; }
 
     @media (max-width: 1100px) { .charts-fx-row,.charts-idx-row { grid-template-columns: repeat(3,1fr); } }
     @media (max-width: 700px)  { .charts-fx-row,.charts-idx-row { grid-template-columns: repeat(2,1fr); } }
@@ -184,6 +190,14 @@
       💡 <strong>Bid</strong> (אדום) = מכירה &nbsp;|&nbsp; <strong>Ask</strong> (ירוק) = קניה &nbsp;|&nbsp;
       תשואות = % שינוי מפתיחת הסשן &nbsp;|&nbsp;
       <strong>לחץ על שורה</strong> לעדכון הגרף הפעיל (כחול) בסקציה המתאימה
+    </div>
+    <div style="background:white;border-radius:9px;padding:8px 14px;margin-bottom:11px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:0.7rem;font-weight:700;color:#334155;margin-left:4px">🕯 זמן נר:</span>
+      <button class="tf-btn" id="tf-15m" onclick="switchTF('15m')">15m</button>
+      <button class="tf-btn" id="tf-30m" onclick="switchTF('30m')">30m</button>
+      <button class="tf-btn active" id="tf-1h"  onclick="switchTF('1h')">1h</button>
+      <button class="tf-btn" id="tf-4h"  onclick="switchTF('4h')">4h</button>
+      <button class="tf-btn" id="tf-1d"  onclick="switchTF('1d')">יום</button>
     </div>
 
     <!-- ═══ FX ═══ -->
@@ -319,6 +333,16 @@ let idxChartObjs  = {};
 let selFxRow  = null;
 let selIdxRow = null;
 
+// Timeframe
+let currentTF = '1h';
+const TF_CONFIG = {
+  '15m': { interval:'15m', range:'2d',  agg:1 },
+  '30m': { interval:'30m', range:'5d',  agg:1 },
+  '1h':  { interval:'1h',  range:'5d',  agg:1 },
+  '4h':  { interval:'1h',  range:'14d', agg:4 },
+  '1d':  { interval:'1d',  range:'60d', agg:1 },
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // TIME
 // ═══════════════════════════════════════════════════════════════════════
@@ -389,6 +413,17 @@ function parseYFJson(json) {
     .filter(c=>c.close!=null&&c.open!=null);
 }
 
+function aggregate(candles, n) {
+  if(n<=1) return candles;
+  const out=[];
+  for(let i=0;i<candles.length;i+=n){
+    const g=candles.slice(i,i+n).filter(c=>c.open!=null&&c.close!=null);
+    if(!g.length) continue;
+    out.push({ts:g[0].ts, open:g[0].open, high:Math.max(...g.map(c=>c.high??c.close)), low:Math.min(...g.map(c=>c.low??c.close)), close:g[g.length-1].close});
+  }
+  return out;
+}
+
 let _diagLines = [];
 function diagLog(msg) {
   _diagLines.push(msg);
@@ -397,10 +432,11 @@ function diagLog(msg) {
   console.log('[diag]', msg);
 }
 
-async function fetchYF(yfSym) {
+async function fetchYF(yfSym, interval='1h', range='5d') {
+  const qs = `interval=${interval}&range=${range}`;
   // Always try /api/chart/ first — works from localhost AND tunnel URLs
   try {
-    const r = await fetch(`/api/chart/${encodeURIComponent(yfSym)}`, { cache:'no-cache' });
+    const r = await fetch(`/api/chart/${encodeURIComponent(yfSym)}?${qs}`, { cache:'no-cache' });
     if (r.ok) {
       const json = await r.json();
       if (!json.error) {
@@ -412,7 +448,7 @@ async function fetchYF(yfSym) {
   } catch(e) { /* fall through to proxy chain */ }
 
   // file:// fallback — try multiple public proxies
-  const b1 = `https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?interval=1h&range=5d`;
+  const b1 = `https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?${qs}`;
   const b2 = b1.replace('query1','query2');
   const bCorsDomain = b2 + '&corsDomain=finance.yahoo.com';
   const E = encodeURIComponent;
@@ -440,10 +476,15 @@ async function fetchYF(yfSym) {
   throw new Error(`${yfSym}: ${lastErr}`);
 }
 
-async function fetchGroup(items) {
+async function fetchGroup(items, interval='1h', range='5d') {
+  const tf=TF_CONFIG[currentTF];
   const out={};
   await Promise.allSettled(items.map(async item=>{
-    try { out[item.sym]=await fetchYF(item.yfSym); }
+    try {
+      let c=await fetchYF(item.yfSym, interval, range);
+      if(tf.agg>1) c=aggregate(c,tf.agg);
+      out[item.sym]=c;
+    }
     catch(e) { console.error(item.sym,e.message); out[item.sym]=[]; }
   }));
   return out;
@@ -509,26 +550,39 @@ const fmtN =(v,d)=>v==null?'—':new Intl.NumberFormat('en-US',{minimumFractionD
 function makeChart(canvasId, candles, color, dec) {
   const canvas=document.getElementById(canvasId);
   if(!canvas) return null;
-  // Find Asia session start (23:00 UTC = 02:00 IST) of most recent trading day
-  const now=new Date();
-  const asiaOpen=new Date(now);
-  asiaOpen.setUTCHours(23,0,0,0);
-  if(now.getUTCHours()<23) asiaOpen.setDate(asiaOpen.getDate()-1);
-  // Roll back over weekend
-  const dow=asiaOpen.getUTCDay();
-  if(dow===6) asiaOpen.setDate(asiaOpen.getDate()-1);
-  if(dow===0) asiaOpen.setDate(asiaOpen.getDate()-2);
-  let filtered=candles.filter(c=>c.ts>=asiaOpen.getTime());
-  if(filtered.length<3) filtered=candles.slice(-24);
-  const toIST=ts=>{const d=new Date(ts+IST*3600000);return`${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')}`;};
+  const isDay=currentTF==='1d';
+  let filtered;
+  if(isDay){
+    filtered=candles.slice(-60);
+  } else {
+    const now=new Date();
+    const asiaOpen=new Date(now);
+    asiaOpen.setUTCHours(23,0,0,0);
+    if(now.getUTCHours()<23) asiaOpen.setDate(asiaOpen.getDate()-1);
+    const dow=asiaOpen.getUTCDay();
+    if(dow===6) asiaOpen.setDate(asiaOpen.getDate()-1);
+    if(dow===0) asiaOpen.setDate(asiaOpen.getDate()-2);
+    filtered=candles.filter(c=>c.ts>=asiaOpen.getTime());
+    if(filtered.length<3) filtered=candles.slice(-48);
+  }
+  const data=filtered.map(c=>({x:c.ts, o:c.open, h:c.high, l:c.low, c:c.close}));
   return new Chart(canvas,{
-    type:'line',
-    data:{labels:filtered.map(c=>toIST(c.ts)),datasets:[{data:filtered.map(c=>c.close),borderColor:color,backgroundColor:color+'18',borderWidth:1.8,pointRadius:0,pointHoverRadius:3,fill:true,tension:0.3,spanGaps:true}]},
+    type:'candlestick',
+    data:{datasets:[{
+      data,
+      color:{up:'#16a34a',down:'#dc2626',unchanged:'#94a3b8'},
+      borderColor:{up:'#16a34a',down:'#dc2626',unchanged:'#94a3b8'}
+    }]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
-      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>` ${c.parsed.y!=null?c.parsed.y.toFixed(dec):'—'}`}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        label:ctx=>{const d=ctx.raw;if(!d)return'';return[`O:${d.o?.toFixed(dec)}  H:${d.h?.toFixed(dec)}`,`L:${d.l?.toFixed(dec)}  C:${d.c?.toFixed(dec)}`];}
+      }}},
       scales:{
-        x:{display:true,ticks:{font:{size:7},color:'#94a3b8',maxTicksLimit:6,maxRotation:0},grid:{display:false}},
-        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:8},color:'#94a3b8',maxTicksLimit:3}}
+        x:{type:'timeseries',adapters:{date:{zone:'Asia/Jerusalem'}},
+          time:{displayFormats:{minute:'HH:mm',hour:'HH:mm',day:'dd/MM'},tooltipFormat:isDay?'dd/MM/yyyy':'HH:mm'},
+          ticks:{source:'auto',maxTicksLimit:6,maxRotation:0,font:{size:7},color:'#94a3b8'},
+          grid:{display:false}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:8},color:'#94a3b8',maxTicksLimit:4}}
       }
     }
   });
@@ -564,7 +618,7 @@ function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick
       </div>
       <div class="c-price">${mid!=null?fmt(mid,displayDec):'—'}</div>
       <div class="c-ret" style="color:${rc}">${ret24!=null?`${arr(ret24)} ${fmtR(ret24)}`:''}</div>
-      <div style="height:85px;position:relative;margin-top:5px"><canvas id="cv_${containerId}_${i}"></canvas></div>`;
+      <div style="height:100px;position:relative;margin-top:5px"><canvas id="cv_${containerId}_${i}"></canvas></div>`;
     container.appendChild(card);
 
     // Destroy old chart
@@ -736,7 +790,8 @@ async function fetchAndRender(showLoader=false){
   if(showLoader){document.getElementById('loadDiv').style.display='block';document.getElementById('mainContent').style.display='none';}
   dot.className='sdot loading';txt.textContent='מושך נרות שעתיים מ-Yahoo Finance...';document.getElementById('refreshBtn').disabled=true;
   try{
-    const[fx,idx]=await Promise.all([fetchGroup(PAIRS),fetchGroup(INDICES)]);
+    const tf=TF_CONFIG[currentTF];
+    const[fx,idx]=await Promise.all([fetchGroup(PAIRS,tf.interval,tf.range),fetchGroup(INDICES,tf.interval,tf.range)]);
     allData={...fx,...idx};
     const snap={};Object.entries(allData).forEach(([sym,c])=>{const r=latestRate(c);if(r)snap[sym]=r;});
     if(Object.keys(snap).length)saveHistory(snap);
@@ -757,6 +812,12 @@ async function fetchAndRender(showLoader=false){
   }finally{document.getElementById('refreshBtn').disabled=false;}
 }
 
+function switchTF(tf){
+  currentTF=tf;
+  document.querySelectorAll('.tf-btn').forEach(b=>b.classList.toggle('active',b.id===`tf-${tf}`));
+  clearTimeout(refreshTimer);
+  fetchAndRender(false).then(scheduleNext);
+}
 function manualRefresh(){clearTimeout(refreshTimer);fetchAndRender(false).then(scheduleNext);}
 function scheduleNext(){
   clearTimeout(refreshTimer);

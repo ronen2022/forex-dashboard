@@ -35,7 +35,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path.startswith('/api/chart/'):
             sym = urllib.parse.unquote(path[len('/api/chart/'):])
-            url = f'https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1h&range=5d'
+            qs = parsed.query or 'interval=1h&range=5d'
+            url = f'https://query1.finance.yahoo.com/v8/finance/chart/{sym}?{qs}'
             try:
                 req = urllib.request.Request(url, headers=YF_HEADERS)
                 with urllib.request.urlopen(req, timeout=15) as resp:
