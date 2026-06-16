@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>דשבורד שוק הון ומט"ח</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -547,9 +545,9 @@ const fmtN =(v,d)=>v==null?'—':new Intl.NumberFormat('en-US',{minimumFractionD
 // ═══════════════════════════════════════════════════════════════════════
 // CHART RENDERING
 // ═══════════════════════════════════════════════════════════════════════
-function makeChart(canvasId, candles, color, dec) {
-  const canvas=document.getElementById(canvasId);
-  if(!canvas) return null;
+function makeChart(divId, candles, color, dec) {
+  const container=document.getElementById(divId);
+  if(!container) return null;
   const isDay=currentTF==='1d';
   let filtered;
   if(isDay){
@@ -565,32 +563,43 @@ function makeChart(canvasId, candles, color, dec) {
     filtered=candles.filter(c=>c.ts>=asiaOpen.getTime());
     if(filtered.length<3) filtered=candles.slice(-48);
   }
-  const data=filtered.map(c=>({x:c.ts, o:c.open, h:c.high, l:c.low, c:c.close}));
-  return new Chart(canvas,{
-    type:'candlestick',
-    data:{datasets:[{
-      data,
-      color:{up:'#16a34a',down:'#dc2626',unchanged:'#94a3b8'},
-      borderColor:{up:'#16a34a',down:'#dc2626',unchanged:'#94a3b8'}
-    }]},
-    options:{responsive:true,maintainAspectRatio:false,animation:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{
-        label:ctx=>{const d=ctx.raw;if(!d)return'';return[`O:${d.o?.toFixed(dec)}  H:${d.h?.toFixed(dec)}`,`L:${d.l?.toFixed(dec)}  C:${d.c?.toFixed(dec)}`];}
-      }}},
-      scales:{
-        x:{type:'timeseries',adapters:{date:{zone:'Asia/Jerusalem'}},
-          time:{displayFormats:{minute:'HH:mm',hour:'HH:mm',day:'dd/MM'},tooltipFormat:isDay?'dd/MM/yyyy':'HH:mm'},
-          ticks:{source:'auto',maxTicksLimit:6,maxRotation:0,font:{size:7},color:'#94a3b8'},
-          grid:{display:false}},
-        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:8},color:'#94a3b8',maxTicksLimit:4}}
-      }
-    }
+  const tzOff=IST*3600; // display as IST
+  const data=filtered
+    .filter(c=>c.open!=null&&c.close!=null)
+    .map(c=>({time:Math.floor(c.ts/1000)+tzOff, open:c.open, high:c.high??c.close, low:c.low??c.close, close:c.close}));
+  if(!data.length) return null;
+
+  const chart=LightweightCharts.createChart(container,{
+    width:container.clientWidth||200,
+    height:container.clientHeight||100,
+    layout:{background:{type:'solid',color:'transparent'},textColor:'#94a3b8',fontSize:9},
+    grid:{vertLines:{color:'#f1f5f9'},horzLines:{color:'#f1f5f9'}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Magnet},
+    rightPriceScale:{borderColor:'#e2e8f0',scaleMargins:{top:0.08,bottom:0.08},
+      textColor:'#94a3b8',
+      minimumWidth:50,
+    },
+    timeScale:{borderColor:'#e2e8f0',timeVisible:true,secondsVisible:false,tickMarkFormatter:(t)=>{
+      const d=new Date(t*1000); return`${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')}`;
+    }},
+    handleScale:false, handleScroll:false,
   });
+  const series=chart.addCandlestickSeries({
+    upColor:'#16a34a', downColor:'#dc2626',
+    borderUpColor:'#16a34a', borderDownColor:'#dc2626',
+    wickUpColor:'#16a34a', wickDownColor:'#dc2626',
+    priceLineVisible:false,
+    priceFormat:{type:'price', precision:dec, minMove:Math.pow(10,-dec)},
+  });
+  series.setData(data);
+  chart.timeScale().fitContent();
+  return chart;
 }
 
 function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick) {
   const container=document.getElementById(containerId);
   if(!container) return;
+  Object.keys(chartStore).forEach(k=>{try{chartStore[k]?.remove();}catch(e){}delete chartStore[k];});
   container.innerHTML='';
 
   slots.forEach((sym,i)=>{
@@ -618,11 +627,11 @@ function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick
       </div>
       <div class="c-price">${mid!=null?fmt(mid,displayDec):'—'}</div>
       <div class="c-ret" style="color:${rc}">${ret24!=null?`${arr(ret24)} ${fmtR(ret24)}`:''}</div>
-      <div style="height:100px;position:relative;margin-top:5px"><canvas id="cv_${containerId}_${i}"></canvas></div>`;
+      <div id="cv_${containerId}_${i}" style="height:100px;position:relative;margin-top:5px"></div>`;
     container.appendChild(card);
 
     // Destroy old chart
-    if(chartStore[i]){chartStore[i].destroy();delete chartStore[i];}
+    if(chartStore[i]){try{chartStore[i].remove();}catch(e){}delete chartStore[i];}
     if(candles.length) {
       setTimeout(()=>{
         chartStore[i]=makeChart(`cv_${containerId}_${i}`,candles,color,tooltipDec);
