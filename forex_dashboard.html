@@ -633,8 +633,8 @@ function renderChartCard(containerId, chartStore, slots, activeSlot, onSlotClick
     // Determine display decimals: 2 for bid/ask display, full for chart tooltip
     const pair=PAIRS.find(p=>p.sym===sym);
     const idx=INDICES.find(p=>p.sym===sym);
-    const displayDec = pair?2 : idx?idx.dec:2;
-    const tooltipDec = pair?pair.dec : idx?idx.dec:4;
+    const displayDec = pair ? 4 : idx ? idx.dec : 2;
+    const tooltipDec = pair ? 4 : idx ? idx.dec : 4;
 
     const card=document.createElement('div');
     card.className=`chart-card${i===activeSlot?' c-active':''}`;
@@ -852,7 +852,7 @@ function openChartModal(sym){
   const candles=allData[sym]||[];
   const pair=PAIRS.find(p=>p.sym===sym);
   const idx=INDICES.find(p=>p.sym===sym);
-  const dec=pair?pair.dec:idx?idx.dec:2;
+  const dec = pair ? 4 : idx ? idx.dec : 2;
   const flagStr=(()=>{const p=PAIRS.find(x=>x.sym===sym);if(p)return p.flags+' ';const id=INDICES.find(x=>x.sym===sym);return id?id.flag+' ':''})();
   document.getElementById('modalTitle').innerHTML=flagStr+sym;
   document.getElementById('modalSub').textContent=`נר: ${currentTF} · ${candles.length} נרות · IST`;
